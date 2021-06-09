@@ -1,5 +1,9 @@
 FROM node:14
 
+ARG CLUSTER=$CLUSTER
+ARG PERCENTAGE=$PERCENTAGE
+ARG TYPE=$TYPE
+
 # Create app directory
 WORKDIR /usr/src/app
 
@@ -13,5 +17,5 @@ RUN npm install
 # add this and below command will run without cache
 COPY . .
 
-CMD [ "./ecs-optimizer.js", "--region", "us-east-1", "--cluster", "eagle-prod", "--percentage", "75", "--type", "CPUUtilization" ]
+CMD [ "bash", "-c", "./ecs-optimizer.js --region us-east-1 --cluster $CLUSTER --percentage $PERCENTAGE --type $TYPE" ]
 #, "--type", "CPUUtilization" ]

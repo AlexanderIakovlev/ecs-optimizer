@@ -117,21 +117,34 @@ sts.getCallerIdentity().promise()
   .then((datas) => {
     lib.logger.result('Done.');
     lib.logger.action('Looking for improvements...');
-    let table = new Table({ head: ['Service', 'Max Used', 'Current', 'Proposed'] });
-    datas.forEach((data, i) => {
+    let table = new Table({ head: ['Service', 'Max Used', 'Current', 'Proposed', 'Desired Count', 'Total Required'] });
+    let total = 0;
+    return Promise.all(datas.map((data, i) => {
       if (data.taskDefinition.containerDefinitions.length !== 1) return;
       if (!servicesMaxMetric[i]) return;
       const currentValue = getCurrentValue(data);
-      const usedValue = servicesMaxMetric[i].maxMetricValue / 100.0 * currentValue;
-      const proposedValue = (servicesMaxMetric[i].maxMetricValue === 0) ? '?' : roundToMultipleOf((usedValue / (targetPercent / 100.0)), 16);
-      table.push([
-        servicesMaxMetric[i].service,
-        (servicesMaxMetric[i].maxMetricValue === 0) ? '?' : `${Math.round(servicesMaxMetric[i].maxMetricValue)}%`,
-        currentValue,
-        proposedValue
-      ]);
-    });
-    console.log(table.toString());
+      return ecs.describeServices({
+           cluster: program.cluster,
+           services: [servicesMaxMetric[i].service]
+         }).promise()
+      .then((result) => {
+        const desired_count = result.services[0].desiredCount;
+        const usedValue = servicesMaxMetric[i].maxMetricValue / 100.0 * currentValue;
+        const proposedValue = (servicesMaxMetric[i].maxMetricValue === 0) ? '?' : roundToMultipleOf((usedValue / (targetPercent / 100.0)), 16);
+        total += proposedValue * desired_count;
+        return table.push([
+          servicesMaxMetric[i].service,
+          (servicesMaxMetric[i].maxMetricValue === 0) ? '?' : `${Math.round(servicesMaxMetric[i].maxMetricValue)}%`,
+          currentValue,
+          proposedValue,
+          desired_count,
+          total
+        ]);
+      })
+    }))
+    .then((result) => {
+      console.log(table.toString());
+    })
   })
   .catch(lib.exceptionHandler.handleException);
 
