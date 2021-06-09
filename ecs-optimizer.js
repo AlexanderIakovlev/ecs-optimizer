@@ -66,7 +66,7 @@ sts.getCallerIdentity().promise()
             Value: program.cluster
           }
         ],
-        Statistics: ['Maximum'],
+        Statistics: program.type === 'CPUUtilization' ? ['Average'] : ['Maximum'],
         Unit: 'Percent'
       };
       return {
@@ -79,10 +79,18 @@ sts.getCallerIdentity().promise()
     lib.logger.result('Done.');
     lib.logger.action('Calculating maximum metric usage over last 24 hours...');
     servicesMaxMetric = datas.filter((data) => { return data; }).map((data) => {
+      if (program.type === 'CPUUtilization') {
+        return {
+          service: data.serviceName,
+          maxMetricValue: median(data.metrics.Datapoints.map((dp) => { return dp.Average; })) || 0
+        };
+      }
+      else {
       return {
         service: data.serviceName,
         maxMetricValue: Math.max.apply(Math, data.metrics.Datapoints.map((dp) => { return dp.Maximum; })) || 0
       };
+    }
     });
     servicesMaxMetric = Array.from(new Set(servicesMaxMetric.map(s => s.service)))
       .map(service => {
@@ -133,9 +141,9 @@ function roundToMultipleOf (n, multiple) {
 
 function getCurrentValue (data) {
   if (program.type === 'CPUUtilization') {
-    return data.taskDefinition.containerDefinitions[0].cpu || data.taskDefinition.containerDefinitions[0].cpuReservation;
+    return data.taskDefinition.containerDefinitions[0].cpu || data.taskDefinition.containerDefinitions[0].cpuReservation || 0;
   }
-  return data.taskDefinition.containerDefinitions[0].memory || data.taskDefinition.containerDefinitions[0].memoryReservation;
+  return data.taskDefinition.containerDefinitions[0].memory || data.taskDefinition.containerDefinitions[0].memoryReservation || 0;
 }
 
 function paginateServices (params, serviceArns = []) {
@@ -169,4 +177,19 @@ function paginateMetrics (params, metrics = []) {
       console.error(err);
       throw new Error('Unable to list metrics');
     });
+}
+
+function median(values){
+  if(values.length ===0) return 0;
+
+  values.sort(function(a,b){
+    return a-b;
+  });
+
+  var half = Math.floor(values.length / 2);
+
+  if (values.length % 2)
+    return values[half];
+
+  return (values[half - 1] + values[half]) / 2.0;
 }
